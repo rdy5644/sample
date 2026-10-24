@@ -567,6 +567,23 @@ const CATEGORY_LABELS = {
   electricals: "Electricals"
 };
 
+const SEARCH_EQUIVALENTS = {
+  tap: ["tap", "faucet", "cock"],
+  taps: ["tap", "faucet", "cock"],
+  faucet: ["faucet", "tap", "cock"],
+  faucets: ["faucet", "tap", "cock"],
+  pipe: ["pipe", "pipes", "piping"],
+  pipes: ["pipe", "pipes", "piping"],
+  piping: ["pipe", "pipes", "piping"],
+  switch: ["switch", "switches"],
+  switches: ["switch", "switches"],
+  fitting: ["fitting", "fittings"],
+  fittings: ["fitting", "fittings"],
+  bath: ["bath", "bathroom", "bathware"],
+  bathroom: ["bath", "bathroom", "bathware"],
+  bathware: ["bath", "bathroom", "bathware"]
+};
+
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
 const productById = new Map(PRODUCTS.map(product => [product.id, product]));
@@ -590,14 +607,37 @@ function readCart() {
 let cart = readCart();
 
 function saveCart() {
-  localStorage.setItem("flowline-quote-list", JSON.stringify(cart));
+  try {
+    localStorage.setItem("flowline-quote-list", JSON.stringify(cart));
+  } catch {
+    // Keep the storefront interactive if browser storage is unavailable.
+  }
+}
+
+function normalizeSearch(value) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function productMatches(product) {
   const categoryMatch = currentCategory === "all" || product.category === currentCategory;
   const brandMatch = currentBrand === "all" || product.brand === currentBrand;
-  const haystack = `${product.name} ${product.brand} ${product.description} ${product.subcategory} ${product.specs.join(" ")}`.toLowerCase();
-  const searchMatch = !searchTerm || haystack.includes(searchTerm.toLowerCase());
+  const haystack = ` ${normalizeSearch([
+    product.id,
+    product.name,
+    product.brand,
+    product.description,
+    product.subcategory,
+    CATEGORY_LABELS[product.category] || product.category,
+    product.badge,
+    product.sourceLabel,
+    ...product.specs
+  ].join(" "))} `;
+  const searchTerms = normalizeSearch(searchTerm).split(/\s+/).filter(Boolean);
+  const haystackWords = haystack.trim().split(/\s+/);
+  const searchMatch = searchTerms.every(term => {
+    const equivalents = SEARCH_EQUIVALENTS[term] || [term];
+    return equivalents.some(equivalent => haystackWords.some(word => word === equivalent || word.startsWith(equivalent) || word.endsWith(equivalent)));
+  });
   return categoryMatch && brandMatch && searchMatch;
 }
 
@@ -759,6 +799,9 @@ function renderProducts() {
   productGrid.innerHTML = filteredProducts.map(renderProductCard).join("");
   $("#emptyState").hidden = filteredProducts.length > 0;
   productGrid.hidden = filteredProducts.length === 0;
+  $("#searchHint").textContent = searchTerm
+    ? `${filteredProducts.length} matching product${filteredProducts.length === 1 ? "" : "s"}`
+    : "Find the right material for the job";
   renderActiveFilters();
 }
 
@@ -958,8 +1001,12 @@ function init() {
   updateCart();
 
   $("#productSearch").addEventListener("input", event => {
+    const wasSearching = Boolean(searchTerm);
     searchTerm = event.target.value.trim();
     renderProducts();
+    if (searchTerm && !wasSearching && $("#catalog").getBoundingClientRect().top > window.innerHeight * 0.7) {
+      $("#catalog").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   });
   $("#brandFilter").addEventListener("change", event => {
     currentBrand = event.target.value;
