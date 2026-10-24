@@ -1001,12 +1001,8 @@ function init() {
   updateCart();
 
   $("#productSearch").addEventListener("input", event => {
-    const wasSearching = Boolean(searchTerm);
     searchTerm = event.target.value.trim();
     renderProducts();
-    if (searchTerm && !wasSearching && $("#catalog").getBoundingClientRect().top > window.innerHeight * 0.7) {
-      $("#catalog").scrollIntoView({ behavior: "smooth", block: "start" });
-    }
   });
   $("#brandFilter").addEventListener("change", event => {
     currentBrand = event.target.value;
